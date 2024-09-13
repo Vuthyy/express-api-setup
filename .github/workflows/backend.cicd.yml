@@ -95,10 +95,10 @@ jobs:
             # Install Node.js and npm if not installed
             if ! command -v npm &> /dev/null; then
               echo "npm is not installed. Installing Node.js and npm..."
-              sudo apt-get update
-              sudo apt-get install -y nodejs npm
-            else
-              echo "npm is already installed."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              nvm install node
             fi
 
             # Install yarn if not installed
@@ -108,16 +108,12 @@ jobs:
               echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
               sudo apt-get update
               sudo apt-get install -y yarn
-            else
-              echo "yarn is already installed."
             fi
 
-            # Check if PM2 is installed, install if necessary
+            # Install PM2 globally if not installed
             if ! command -v pm2 &> /dev/null; then
               echo "PM2 is not installed. Installing PM2..."
               npm install -g pm2
-            else
-              echo "PM2 is already installed."
             fi
 
             cd /home/ubuntu/apps/build
@@ -131,4 +127,3 @@ jobs:
               echo "Application is not running. Starting..."
               pm2 start yarn --name "product-service" -- start
             fi
-
