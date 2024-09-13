@@ -1,5 +1,5 @@
 name: CI/CD Pipeline for Service
-
+#hello
 on:
   pull_request:
     branches: [main] # Specify branches as needed
@@ -46,15 +46,15 @@ jobs:
           path: ./build # The path to store the downloaded artifact
 
       - name: Prepare Deployment Directories
-        uses: appleboy/ssh-action@master # SSH into the server to prepare directories
+        uses: appleboy/ssh-action@v0.1.0
         with:
-          host: ${{ secrets.SERVER_IP }} # Server IP address from secrets
-          username: ${{ secrets.SERVER_USERNAME }} # Server username from secrets
-          key: ${{ secrets.SSH_PRIVATE_KEY }} # SSH private key from secrets
-          port: 22 # SSH port, usually 22
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           script: |
-            mkdir -p /home/ubuntu/apps/build  # Change to match your desire directory structure
-            mkdir -p /home/ubuntu/apps/build/configs  # For additional configuration files
+            sudo mkdir -p /home/ubuntu/apps/build
+            sudo mkdir -p /home/ubuntu/apps/build/configs
 
       - name: Copy files to Server
         uses: appleboy/scp-action@master # Copies files to the server using SCP
