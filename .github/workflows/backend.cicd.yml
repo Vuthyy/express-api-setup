@@ -54,7 +54,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            mkdir -p /home/ubuntu/apps/build  
+            mkdir -p /home/ubuntu/apps/build
             mkdir -p /home/ubuntu/apps/build/configs
 
       - name: Copy files to Server
@@ -78,7 +78,7 @@ jobs:
           script: |
             echo "NODE_ENV=production" > /home/ubuntu/apps/build/configs/.env.production
             echo "PORT=${{ secrets.PORT }}" >> /home/ubuntu/apps/build/configs/.env.production
-            echo "MONGODB_URL=${{ secrets.MONGODB_URL}}" >> /home/ubuntu/apps/build/configs/.env.production
+            echo "MONGODB_URL=${{ secrets.MONGODB_URL }}" >> /home/ubuntu/apps/build/configs/.env.production
 
       - name: Install Yarn and PM2, and Deploy Application
         uses: appleboy/ssh-action@master
@@ -95,7 +95,7 @@ jobs:
             # Check if PM2 is installed, install if necessary
             if ! command -v pm2 &> /dev/null; then
               echo "PM2 is not installed. Installing PM2..."
-              yarn global add pm2
+              npm install -g pm2
             else
               echo "PM2 is already installed."
             fi
