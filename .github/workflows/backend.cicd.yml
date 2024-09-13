@@ -53,8 +53,13 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Debug SSH Connection
-        run: ssh -v -o "StrictHostKeyChecking=no" -i ~/.ssh/id_rsa ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_IP }} "echo 'SSH Debugging'"
+      - name: Check SSH Connection
+        run: |
+          ssh -o "StrictHostKeyChecking=no" -i ~/.ssh/id_rsa ec2-user@${{ secrets.SERVER_IP }} "echo 'SSH Connection Successful'"
+          
+      - name: Enable Debug Mode
+        run: |
+          ssh -v -o "StrictHostKeyChecking=no" -i ~/.ssh/id_rsa ec2-user@${{ secrets.SERVER_IP }} "echo 'SSH Connection Successful'"
 
       - name: Prepare Deployment Directories
         uses: appleboy/ssh-action@v0.1.0
