@@ -107,11 +107,14 @@ jobs:
               npm install -g yarn
             fi
 
-            # Ensure PM2 is installed
+            # Ensure PM2 is installed and in PATH
             if ! command -v pm2 &> /dev/null; then
               echo "PM2 is not installed. Installing PM2..."
               yarn global add pm2
             fi
+
+            # Ensure PM2 is available in PATH
+            export PATH="$HOME/.yarn/bin:$PATH"
 
             cd /home/ubuntu/apps/build
             yarn install --production
