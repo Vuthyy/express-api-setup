@@ -1,72 +1,75 @@
 name: CI/CD Pipeline for Service
-# Version01
+
 on:
   pull_request:
-    branches: [main] # Specify branches as needed
+    branches: [main]
   push:
-    branches: [main] # Specify branches as needed
-    paths:
-      - "withSwagger/**" # Adjust path to match the service directory
+    branches: [main]
+
 jobs:
   build:
-    runs-on: ubuntu-latest # Specifies that the job should run on the latest Ubuntu virtual environment provided by GitHub
-    defaults:
-      run:
-        working-directory: ./ # Adjust this to the root directory of your Node.js project
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # This step checks out your repository under $GITHUB_WORKSPACE, so your workflow can access it
-        with:
-          fetch-depth: 0 # Ensures all branches and tags are fetched, useful for versioning or other git-related operations
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4 # This step sets up a Node.js environment with a specified version
+        uses: actions/setup-node@v4
         with:
-          node-version: "20" # Specify the Node.js version you require, e.g., '14', '16'
+          node-version: "20"
 
       - name: Install dependencies
-        run: yarn install # Runs yarn install to install all dependencies defined in your package.json
+        run: yarn install
 
       - name: Run build
-        run: yarn build # Executes the build script defined in your package.json
+        env:
+          PORT: ${{ secrets.PORT }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          MONGODB_URL: ${{ secrets.MONGODB_URL }}
+        run: yarn build
 
-      # - name: Run tests
-      #   env:
-      #     CUSTOM_ENV_VARIABLE: ${{ secrets.CUSTOM_ENV_VARIABLE }}  # Replace with actual environment variables needed for testing
-      #   run: yarn test  # Executes tests using yarn. Customize this command based on your test runner
       - name: Archive build artifacts
-        uses: actions/upload-artifact@v4 # Archives build artifacts for use in later jobs or for deployment
+        uses: actions/upload-artifact@v4
         with:
-          name: artifact-name # Optionally change the name of the artifact
-          path: ./build # Adjust this to where your build outputs artifacts, e.g., './build'
+          name: build-artifact
+          path: ./build
 
   deploy:
-    runs-on: ubuntu-latest # Specifies that the job should run on the latest Ubuntu virtual environment provided by GitHub
-    needs: build # Specifies that this job needs the 'build' job to complete successfully before it starts
-    if: github.ref == 'refs/heads/master' # This job runs only if the push or PR merge is to the 'main' branch
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4 # Downloads artifacts from the build job
+        uses: actions/download-artifact@v4
         with:
-          name: artifact-name # The name of the artifact to download
-          path: ./build # The path to store the downloaded artifact
+          name: build-artifact
+          path: ./build
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Check SSH Connection
+        run: |
+          ssh -o "StrictHostKeyChecking=no" -i ~/.ssh/id_rsa ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_IP }} "echo 'SSH Connection Successful'"
+
       - name: Prepare Deployment Directories
-        uses: appleboy/ssh-action@master # SSH into the server to prepare directories
+        uses: appleboy/ssh-action@v0.1.0
         with:
-          host: ${{ secrets.SERVER_IP }} # Server IP address from secrets
-          username: ${{ secrets.SERVER_USERNAME }} # Server username from secrets
-          key: ${{ secrets.SSH_PRIVATE_KEY }} # SSH private key from secrets
-          port: 22 # SSH port, usually 22
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           script: |
-            sudo mkdir -p /home/ubuntu/apps/build  # Change to match your desire directory structure
-            sudo mkdir -p /home/ubuntu/apps/build/configs  # For additional configuration files
-            sudo chmod 777 /home/ubuntu/apps/build
-            sudo chmod 777 /home/ubuntu/apps/build/configs
+            mkdir -p /home/ubuntu/apps/build
+            mkdir -p /home/ubuntu/apps/build/configs
 
       - name: Copy files to Server
-        uses: appleboy/scp-action@master # Copies files to the server using SCP
+        uses: appleboy/scp-action@v0.1.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
@@ -75,36 +78,31 @@ jobs:
           source: "./build/*"
           target: "/home/ubuntu/apps/build"
           strip_components: 1
+
       - name: Create .env File
-        uses: appleboy/ssh-action@master # Creates an environment variable file on the server
+        uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            echo "MONGODB_URL=${{secrets.MONGODB_URI}}" >> /home/ubuntu/apps/build/configs/.env
+            echo "NODE_ENV=production" > /home/ubuntu/apps/build/.env
+            echo "PORT=3000" >> /home/ubuntu/apps/build/.env
+            echo "MONGODB_URL=${{ secrets.MONGODB_URL }}" >> /home/ubuntu/apps/build/.env
 
       - name: Install Dependencies and Restart Application
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            sudo yum update -y
-            sudo yum install -y nodejs npm
-            sudo npm install -g yarn
-            node --version
-            npm --version
-            yarn --version
             cd /home/ubuntu/apps/build
-            yarn install
-            if yarn pm2 show product-service > /dev/null; then
-              echo "Application is running. Restarting..."
-              yarn restart
+            yarn install --production
+            if pm2 show your-service-name > /dev/null; then
+              pm2 restart your-service-name
             else
-              echo "Application is not running. Starting..."
-              yarn start
+              pm2 start server.js --name your-service-name
             fi
