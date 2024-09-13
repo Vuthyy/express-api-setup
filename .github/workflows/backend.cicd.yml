@@ -92,12 +92,25 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # Load nvm
 
-            # Check if PM2 is installed, install if necessary
+            # Ensure Node.js and npm are installed
+            if ! command -v node &> /dev/null; then
+              echo "Node.js is not installed. Installing Node.js..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              nvm install node
+            fi
+
+            # Ensure Yarn is installed
+            if ! command -v yarn &> /dev/null; then
+              echo "Yarn is not installed. Installing Yarn..."
+              npm install -g yarn
+            fi
+
+            # Ensure PM2 is installed
             if ! command -v pm2 &> /dev/null; then
               echo "PM2 is not installed. Installing PM2..."
-              npm install -g pm2
-            else
-              echo "PM2 is already installed."
+              yarn global add pm2
             fi
 
             cd /home/ubuntu/apps/build
