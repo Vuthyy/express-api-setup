@@ -1,81 +1,134 @@
-deploy:
-  runs-on: ubuntu-latest
-  needs: build
-  if: github.ref == 'refs/heads/main'
+name: CI/CD Pipeline for Service
 
-  steps:
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: build
-        path: ./build
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
-    - name: Prepare Deployment Directories
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          mkdir -p /home/ubuntu/apps/build  
-          mkdir -p /home/ubuntu/apps/build/configs
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "."
 
-    - name: Copy files to Server
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        source: "./build/*"
-        target: "/home/ubuntu/apps/build"
-        strip_components: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Create .env File
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          echo "NODE_ENV=production" > /home/ubuntu/apps/build/configs/.env.production
-          echo "PORT=${{ secrets.PORT }}" >> /home/ubuntu/apps/build/configs/.env.production
-          echo "MONGODB_URL=${{ secrets.MONGODB_URL}}" >> /home/ubuntu/apps/build/configs/.env.production
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-    - name: Install Yarn and PM2, and Deploy Application
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          # Load environment variables for Node.js and nvm
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # Load nvm
+      - name: Install dependencies
+        run: yarn install
 
-          # Check if PM2 is installed, install if necessary
-          if ! command -v pm2 &> /dev/null; then
-            echo "PM2 is not installed. Installing PM2..."
-            yarn global add pm2
-            # Ensure global binaries are in PATH
-            export PATH=$(yarn global bin):$PATH
-            # Verify installation
-            pm2 --version || { echo "PM2 installation failed"; exit 1; }
-          else
-            echo "PM2 is already installed."
-          fi
+      - name: Run build
+        run: yarn build
 
-          cd /home/ubuntu/apps/build
-          yarn install --production
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: ./build
 
-          # Check if the PM2 process is running, if so restart, otherwise start
-          if pm2 show product-service > /dev/null; then
-            echo "Application is running. Restarting..."
-            pm2 restart product-service
-          else
-            echo "Application is not running. Starting..."
-            pm2 start yarn --name "product-service" -- start
-          fi
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: ./build
+
+      - name: Prepare Deployment Directories
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            mkdir -p /home/ubuntu/apps/build
+            mkdir -p /home/ubuntu/apps/build/configs
+
+      - name: Copy files to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "./build/*"
+          target: "/home/ubuntu/apps/build"
+          strip_components: 1
+
+      - name: Create .env File
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "NODE_ENV=production" > /home/ubuntu/apps/build/configs/.env.production
+            echo "PORT=${{ secrets.PORT }}" >> /home/ubuntu/apps/build/configs/.env.production
+            echo "MONGODB_URL=${{ secrets.MONGODB_URL }}" >> /home/ubuntu/apps/build/configs/.env.production
+
+      - name: Install Yarn and PM2, and Deploy Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Load environment variables for Node.js and nvm
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # Load nvm
+
+            # Install Node.js and npm if not installed
+            if ! command -v npm &> /dev/null; then
+              echo "npm is not installed. Installing Node.js and npm..."
+              sudo apt-get update
+              sudo apt-get install -y nodejs npm
+            else
+              echo "npm is already installed."
+            fi
+
+            # Install yarn if not installed
+            if ! command -v yarn &> /dev/null; then
+              echo "yarn is not installed. Installing yarn..."
+              curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+              echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+              sudo apt-get update
+              sudo apt-get install -y yarn
+            else
+              echo "yarn is already installed."
+            fi
+
+            # Check if PM2 is installed, install if necessary
+            if ! command -v pm2 &> /dev/null; then
+              echo "PM2 is not installed. Installing PM2..."
+              npm install -g pm2
+            else
+              echo "PM2 is already installed."
+            fi
+
+            cd /home/ubuntu/apps/build
+            yarn install --production
+
+
+            # Check if the PM2 process is running, if so restart, otherwise start
+            if pm2 show product-service > /dev/null; then
+              echo "Application is running. Restarting..."
+              pm2 restart product-service
+            else
+              echo "Application is not running. Starting..."
+              pm2 start yarn --name "product-service" -- start
+            fi
