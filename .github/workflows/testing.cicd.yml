@@ -121,7 +121,7 @@ jobs:
 
             # Install production dependencies
             yarn install --production
-# Restart or start the application
+            # Restart or start the application
             if pm2 show product-service > /dev/null; then
               echo "Application is running. Restarting..."
               pm2 restart product-service

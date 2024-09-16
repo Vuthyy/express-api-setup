@@ -1,6 +1,6 @@
 // src/database/connection.ts
-import { configs } from "../utils/configs";
 import mongoose from "mongoose";
+import configs from "../config";
 
 async function connectToMongoDB() {
   try {
